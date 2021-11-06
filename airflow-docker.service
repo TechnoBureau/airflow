@@ -1,0 +1,15 @@
+[Unit]
+Description=Airflow Docker Container
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+Environment=AIRFLOW_UID=5000
+WorkingDirectory=/opt/airflow
+ExecStart=/usr/bin/docker-compose up
+ExecStop=/usr/bin/docker-compose down
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

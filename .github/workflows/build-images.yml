@@ -1,0 +1,72 @@
+
+---
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ main ]
+  release:
+    types: [created]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        repository: apache/airflow
+        path: '.'
+
+    - name: Build Airflow Docker Image
+      run: |
+        IMAGE_ID=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+        # Change all uppercase to lowercase
+        IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+        # Strip git ref prefix from version
+        VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+        # Strip "v" prefix from tag name
+        [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+        # Use Docker `latest` tag convention
+        [ "$VERSION" == "master" ] && VERSION=latest
+        [ "$VERSION" == "main" ] && VERSION=latest
+        echo IMAGE_ID=$IMAGE_ID
+        echo VERSION=$VERSION
+        docker build . \
+          --build-arg PYTHON_BASE_IMAGE="python:3.6-slim-buster" \
+          --build-arg AIRFLOW_VERSION="2.2.1" \
+          --build-arg AIRFLOW_EXTRAS="async,celery,ftp,mysql,pandas,postgres,sftp,ssh" \
+          --build-arg INSTALL_MSSQL_CLIENT="false" \
+          --build-arg AIRFLOW_IMAGE_REPOSITORY=${{ github.repository }} \
+          --build-arg RUNTIME_APT_DEPS="apt-transport-https apt-utils ca-certificates curl dumb-init gnupg gosu krb5-user libffi6 libsasl2-2 libsasl2-modules libssl1.1 locales lsb-release netcat openssh-client postgresql-client python2 rsync sasl2-bin" \
+          --tag $IMAGE_ID:$VERSION --label "runnumber=${GITHUB_RUN_ID}"
+
+    - name: Log in to registry
+      # This is where you will update the PAT to GITHUB_TOKEN
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY -u ${{ github.actor }} --password-stdin
+
+    - name: Push image
+      run: |
+        IMAGE_ID=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+        # Change all uppercase to lowercase
+        IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+        # Strip git ref prefix from version
+        VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+        # Strip "v" prefix from tag name
+        [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+        # Use Docker `latest` tag convention
+        [ "$VERSION" == "master" ] && VERSION=latest
+        [ "$VERSION" == "main" ] && VERSION=latest
+        echo IMAGE_ID=$IMAGE_ID
+        echo VERSION=$VERSION
+        docker push $IMAGE_ID:$VERSION
+
